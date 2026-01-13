@@ -1,0 +1,1476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Mafia • Social Deduction Game</title>
+  <style>
+    :root{
+      --primary:#0A84FF;
+      --secondary:#5E5CE6;
+      --success:#30D158;
+      --warning:#FF9F0A;
+      --danger:#FF453A;
+      --text:#F5F5F7;
+      --muted:rgba(245,245,247,.65);
+      --divider:rgba(255,255,255,.10);
+      --shadow:rgba(0,0,0,.45);
+      --blur:18px;
+      --radius:22px;
+    }
+
+    /* Scene palettes (set on body[data-scene]) */
+    body[data-scene="noir"]{ --primary:#0A84FF; --secondary:#5E5CE6;
+      background:
+        radial-gradient(1200px 600px at 20% 0%, rgba(94,92,230,.22), transparent 60%),
+        radial-gradient(900px 700px at 110% 20%, rgba(10,132,255,.18), transparent 55%),
+        linear-gradient(180deg, #090A0B, #0B0B0C 30%, #070708);
+    }
+    body[data-scene="manor"]{ --primary:#BF5AF2; --secondary:#FF9F0A;
+      background:
+        radial-gradient(900px 600px at 10% 10%, rgba(191,90,242,.20), transparent 55%),
+        radial-gradient(1000px 700px at 90% 10%, rgba(255,159,10,.14), transparent 60%),
+        linear-gradient(180deg, #09080B, #0B0B0C 40%, #060507);
+    }
+    body[data-scene="space"]{ --primary:#64D2FF; --secondary:#5E5CE6;
+      background:
+        radial-gradient(1000px 650px at 15% 15%, rgba(100,210,255,.18), transparent 60%),
+        radial-gradient(1200px 750px at 95% 5%, rgba(94,92,230,.20), transparent 65%),
+        linear-gradient(180deg, #05060A, #06060A 35%, #030308);
+    }
+    body[data-scene="cyber"]{ --primary:#00E5FF; --secondary:#FF2D55;
+      background:
+        radial-gradient(1000px 650px at 12% 10%, rgba(0,229,255,.14), transparent 60%),
+        radial-gradient(900px 650px at 88% 12%, rgba(255,45,85,.12), transparent 62%),
+        linear-gradient(180deg, #050507, #07070B 40%, #040407);
+    }
+    body[data-scene="western"]{ --primary:#FF9F0A; --secondary:#34C759;
+      background:
+        radial-gradient(1100px 700px at 10% 12%, rgba(255,159,10,.14), transparent 60%),
+        radial-gradient(1000px 700px at 90% 10%, rgba(52,199,89,.10), transparent 60%),
+        linear-gradient(180deg, #0B0806, #0B0B0C 40%, #070505);
+    }
+
+    *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+    html,body{height:100%}
+    body{
+      font-family:-apple-system,BlinkMacSystemFont,"SF Pro Display","SF Pro Text","Helvetica Neue",sans-serif;
+      color:var(--text);
+      line-height:1.45;
+      overflow-x:hidden;
+      padding-bottom:env(safe-area-inset-bottom);
+    }
+
+    /* Accessibility: respect reduced motion */
+    @media (prefers-reduced-motion: reduce){
+      *{animation:none !important; transition:none !important}
+    }
+
+    /* Ambient vector backdrop */
+    .ambient{position:fixed; inset:0; pointer-events:none; z-index:-2; overflow:hidden}
+    .ambient svg{position:absolute; width:min(1100px, 180vw); height:auto; opacity:.55}
+    .ambient .a1{left:-220px; top:-260px; transform:rotate(-10deg)}
+    .ambient .a2{right:-260px; top:-210px; transform:rotate(12deg)}
+    .ambient .grain{position:absolute; inset:0;
+      background-image:url('data:image/svg+xml;utf8,\
+        <svg xmlns="http://www.w3.org/2000/svg" width="220" height="220">\
+          <filter id="n"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="3" stitchTiles="stitch"/></filter>\
+          <rect width="220" height="220" filter="url(%23n)" opacity="0.16"/>\
+        </svg>');
+      mix-blend-mode:overlay; opacity:.22;
+    }
+
+    /* Cinematic overlay */
+    .overlay{position:fixed; inset:0; display:none; align-items:center; justify-content:center; z-index:50}
+    .overlay.show{display:flex}
+    .overlay .shade{position:absolute; inset:0;
+      background:radial-gradient(1200px 700px at 50% 20%, rgba(255,255,255,.08), rgba(0,0,0,.65));
+      backdrop-filter: blur(22px);
+      animation: fadeIn .35s ease;
+    }
+    .overlay .panel{
+      position:relative;
+      width:min(720px, calc(100vw - 32px));
+      border-radius:28px;
+      border:1px solid rgba(255,255,255,.14);
+      background:linear-gradient(180deg, rgba(255,255,255,.10), rgba(255,255,255,.05));
+      box-shadow:0 30px 120px rgba(0,0,0,.55);
+      padding:22px;
+      overflow:hidden;
+      transform: translateY(14px) scale(.985);
+      opacity:0;
+      animation: panelIn .55s cubic-bezier(.2,.8,.2,1) forwards;
+    }
+    .overlay .panel::before{
+      content:"";
+      position:absolute; inset:-2px;
+      background:radial-gradient(900px 280px at 30% 0%, color-mix(in oklab, var(--primary) 40%, transparent), transparent 55%),
+                 radial-gradient(900px 280px at 70% 0%, color-mix(in oklab, var(--secondary) 40%, transparent), transparent 58%);
+      opacity:.55;
+      filter: blur(10px);
+      pointer-events:none;
+    }
+    .overlay .top{display:flex; gap:16px; align-items:center; position:relative}
+    .overlay .art{width:92px; height:92px; flex:0 0 auto; filter: drop-shadow(0 22px 36px rgba(0,0,0,.35));}
+    .overlay .kicker{font-weight:950; letter-spacing:.9px; text-transform:uppercase; font-size:.82rem; color:rgba(245,245,247,.75)}
+    .overlay .title{font-weight:1000; letter-spacing:-0.7px; font-size:1.85rem; margin-top:3px}
+    .overlay .body{position:relative; margin-top:14px; color:rgba(245,245,247,.82); line-height:1.75}
+    .overlay .hint{position:relative; margin-top:12px; color:rgba(245,245,247,.62); font-size:.95rem}
+
+    @keyframes fadeIn{from{opacity:0}to{opacity:1}}
+    @keyframes panelIn{to{opacity:1; transform: translateY(0) scale(1)}}
+
+    .container{max-width:720px;margin:0 auto;padding:20px;min-height:100%;display:flex;flex-direction:column}
+
+    header{padding:36px 0 18px}
+
+    .brand{display:flex; align-items:flex-start; justify-content:space-between; gap:16px; animation: rise .8s cubic-bezier(.2,.8,.2,1)}
+    .brandLeft{display:flex; gap:14px; align-items:center}
+
+    .logo{width:64px; height:64px; border-radius:18px;
+      background:linear-gradient(135deg, rgba(255,255,255,.12), rgba(255,255,255,.06));
+      border:1px solid var(--divider);
+      backdrop-filter: blur(var(--blur));
+      box-shadow: 0 18px 50px var(--shadow);
+      display:grid; place-items:center;
+    }
+
+    .titleMain{
+      font-size:2.35rem; font-weight:900; letter-spacing:-0.7px;
+      background:linear-gradient(135deg,var(--primary),var(--secondary));
+      -webkit-background-clip:text; background-clip:text; color:transparent;
+      line-height:1.06;
+    }
+    .subtitle{color:var(--muted); font-size:1.02rem; margin-top:4px}
+
+    .pill{
+      display:inline-flex; align-items:center; gap:10px;
+      padding:10px 12px;
+      border-radius:999px;
+      border:1px solid rgba(255,255,255,.14);
+      background:rgba(255,255,255,.06);
+      backdrop-filter: blur(var(--blur));
+      cursor:pointer;
+      user-select:none;
+      transition: transform .18s ease, background .2s ease;
+      font-weight:850;
+      color:rgba(245,245,247,.88);
+      font-size:.95rem;
+    }
+    .pill:active{transform: scale(.985)}
+    .pill small{color:rgba(245,245,247,.62); font-weight:800}
+
+    .card{
+      background:linear-gradient(180deg, rgba(255,255,255,.08), rgba(255,255,255,.05));
+      border:1px solid var(--divider);
+      border-radius:var(--radius);
+      box-shadow:0 18px 60px var(--shadow);
+      backdrop-filter: blur(var(--blur));
+      padding:22px;
+      margin-bottom:14px;
+      animation: cardIn .55s cubic-bezier(.2,.8,.2,1);
+    }
+
+    .row{display:flex;gap:12px; align-items:center}
+    .grow{flex:1}
+
+    .btn{width:100%; padding:15px 16px; border:none; border-radius:14px; font-size:1.05rem; font-weight:800;
+      cursor:pointer; font-family:inherit; letter-spacing:-0.3px;
+      transition: transform .18s ease, opacity .2s ease;
+    }
+    .btn:active{transform:scale(.985)}
+    .btn:disabled{opacity:.45; cursor:not-allowed; transform:none}
+    .btn-primary{background:linear-gradient(135deg,var(--primary),var(--secondary)); color:white}
+    .btn-secondary{background:rgba(255,255,255,.08); color:var(--text); border:1px solid var(--divider)}
+    .btn-danger{background:linear-gradient(135deg,var(--danger), #FF2D55); color:white}
+    .btn-success{background:linear-gradient(135deg,var(--success), #34C759); color:white}
+
+    .field{margin:14px 0}
+    label{display:block;margin-bottom:8px; color:rgba(245,245,247,.7); font-size:.82rem; font-weight:800; text-transform:uppercase; letter-spacing:.9px}
+
+    input,select{width:100%; padding:14px 14px; border-radius:14px; border:1px solid var(--divider);
+      background:rgba(0,0,0,.16); color:var(--text); outline:none;
+      transition: border-color .2s ease;
+    }
+    input:focus,select:focus{border-color:color-mix(in oklab, var(--primary) 70%, white 0%)}
+
+    .hintText{color:var(--muted); font-size:.98rem; line-height:1.55}
+
+    .chips{display:flex;flex-wrap:wrap;gap:10px; padding:10px 0; min-height:48px}
+    .chip{display:inline-flex; gap:10px; align-items:center; padding:10px 12px;
+      background:rgba(255,255,255,.08); border:1px solid var(--divider); border-radius:12px;
+      animation: chipIn .35s cubic-bezier(.2,.8,.2,1);
+    }
+    .chip .x{border:none; background:rgba(255,69,58,.18); color:#FFD3D0; border:1px solid rgba(255,69,58,.25);
+      padding:5px 10px; border-radius:10px; font-weight:900; cursor:pointer}
+
+    .status{margin-top:12px; padding:14px 14px; border-radius:16px; border:1px solid var(--divider); background:rgba(255,255,255,.06)}
+
+    .hidden{display:none !important}
+
+    .grid{display:grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap:12px; margin-top:14px}
+    .pick{padding:18px 12px; border-radius:16px; border:1px solid var(--divider); background:rgba(255,255,255,.06);
+      color:var(--text); font-weight:900; cursor:pointer; transition: transform .18s ease, border-color .2s ease}
+    .pick:hover{transform: translateY(-1px); border-color:color-mix(in oklab, var(--primary) 55%, transparent)}
+    .pick[disabled]{opacity:.42; cursor:not-allowed; transform:none}
+
+    .phase{border-radius:18px; padding:18px; margin:10px 0 18px; border:1px solid var(--divider);
+      background:linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      display:flex; align-items:center; justify-content:space-between; gap:14px}
+    .phase .label{font-weight:1000; letter-spacing:-0.4px; font-size:1.12rem}
+    .phase .meta{color:var(--muted); font-size:.95rem}
+
+    .info{display:grid; grid-template-columns: repeat(2, 1fr); gap:10px; margin-bottom:14px}
+    .box{padding:14px; border-radius:16px; border:1px solid var(--divider); background:rgba(255,255,255,.06); text-align:center}
+    .box .k{color:var(--muted); font-size:.8rem; font-weight:900; text-transform:uppercase; letter-spacing:.8px}
+    .box .v{font-size:1.45rem; font-weight:1000; margin-top:4px}
+
+    .list{list-style:none; margin-top:10px}
+    .item{padding:14px 14px; border-radius:16px; border:1px solid var(--divider); background:rgba(255,255,255,.06);
+      display:flex; justify-content:space-between; align-items:center; margin:10px 0; animation: rowIn .4s cubic-bezier(.2,.8,.2,1)}
+    .badge{font-size:.84rem; font-weight:1000; padding:7px 10px; border-radius:999px; border:1px solid var(--divider); color:rgba(255,255,255,.9)}
+    .badge.dead{background:rgba(255,69,58,.16); border-color:rgba(255,69,58,.24); color:#FFD3D0}
+
+    .rolePanel{padding:24px; border-radius:20px; text-align:center; border:1px solid var(--divider);
+      background:linear-gradient(180deg, rgba(255,255,255,.09), rgba(255,255,255,.05))}
+    .roleIcon{width:86px; height:86px; margin:0 auto 14px; filter: drop-shadow(0 18px 30px rgba(0,0,0,.35));}
+    .roleTitle{font-size:1.9rem; font-weight:1000; letter-spacing:-0.6px}
+    .roleDesc{color:var(--muted); margin-top:10px; line-height:1.6}
+    .backstory{margin-top:16px; text-align:left; padding:16px; border-radius:16px;
+      border:1px solid color-mix(in oklab, var(--secondary) 35%, transparent);
+      background:linear-gradient(135deg, color-mix(in oklab, var(--secondary) 22%, transparent), rgba(255,255,255,.04));
+      color:rgba(245,245,247,.85); line-height:1.7}
+
+    .narrator{margin:12px 0 6px; border-radius:22px; border:1px solid color-mix(in oklab, var(--secondary) 35%, transparent);
+      background:linear-gradient(135deg, color-mix(in oklab, var(--secondary) 22%, transparent), rgba(255,255,255,.04));
+      box-shadow:0 18px 50px rgba(94,92,230,.14); overflow:hidden}
+    .narrator .head{display:flex; align-items:center; justify-content:space-between; padding:14px 16px;
+      border-bottom:1px solid rgba(255,255,255,.08)}
+    .narrator .head .t{display:flex; align-items:center; gap:10px; font-weight:1000; letter-spacing:.9px; text-transform:uppercase;
+      font-size:.82rem; color:rgba(245,245,247,.78)}
+    .narrator .body{padding:16px}
+    .event{padding:14px 14px; border-radius:16px; border:1px solid rgba(255,255,255,.10); background:rgba(0,0,0,.12);
+      margin:10px 0; transform: translateY(6px); opacity:0; animation: eventIn .55s cubic-bezier(.2,.8,.2,1) forwards}
+    .event .h{font-weight:1000; letter-spacing:-0.2px}
+    .event .p{color:rgba(245,245,247,.82); margin-top:8px; line-height:1.75}
+
+    .privateTag{display:inline-flex; align-items:center; gap:8px; padding:6px 10px; border-radius:999px;
+      background:rgba(255,159,10,.14); border:1px solid rgba(255,159,10,.22);
+      color:rgba(255,225,185,.95); font-weight:1000; font-size:.78rem; letter-spacing:.6px; text-transform:uppercase}
+
+    .sceneBanner{margin-top:12px; border-radius:22px; border:1px solid rgba(255,255,255,.14);
+      background:linear-gradient(135deg, rgba(255,255,255,.10), rgba(255,255,255,.04));
+      padding:14px; display:flex; gap:14px; align-items:center}
+    .sceneBanner .art{width:64px; height:64px; flex:0 0 auto; opacity:.95}
+    .sceneBanner .txt .h{font-weight:1000; letter-spacing:-0.3px}
+    .sceneBanner .txt .p{color:rgba(245,245,247,.70); margin-top:4px; line-height:1.55}
+
+    @keyframes rise{from{opacity:0; transform: translateY(14px)} to{opacity:1; transform: translateY(0)}}
+    @keyframes cardIn{from{opacity:0; transform: translateY(16px)} to{opacity:1; transform: translateY(0)}}
+    @keyframes rowIn{from{opacity:0; transform: translateX(-14px)} to{opacity:1; transform: translateX(0)}}
+    @keyframes chipIn{from{opacity:0; transform: translateY(10px) scale(.98)} to{opacity:1; transform: translateY(0) scale(1)}}
+    @keyframes eventIn{to{opacity:1; transform: translateY(0)}}
+
+    @media (max-width:480px){
+      .container{padding:16px}
+      .titleMain{font-size:2.05rem}
+      .grid{grid-template-columns: 1fr}
+      .brand{flex-direction:column; align-items:flex-start}
+    }
+
+    .divider{height:1px; background:var(--divider); margin:14px 0}
+    .mini{font-size:.92rem; color:var(--muted)}
+  </style>
+</head>
+<body data-scene="noir">
+  <div class="ambient" aria-hidden="true">
+    <svg class="a1" viewBox="0 0 900 700" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g1" x1="0" x2="1" y1="0" y2="1">
+          <stop offset="0" stop-color="var(--primary)" stop-opacity=".55"/>
+          <stop offset="1" stop-color="var(--secondary)" stop-opacity=".25"/>
+        </linearGradient>
+      </defs>
+      <path d="M115,425 C40,250 200,90 385,120 C510,140 540,240 640,270 C820,325 805,550 635,600 C520,632 460,565 370,555 C270,545 170,565 115,425 Z" fill="url(#g1)"/>
+    </svg>
+    <svg class="a2" viewBox="0 0 900 700" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="g2" x1="1" x2="0" y1="0" y2="1">
+          <stop offset="0" stop-color="var(--secondary)" stop-opacity=".55"/>
+          <stop offset="1" stop-color="var(--primary)" stop-opacity=".18"/>
+        </linearGradient>
+      </defs>
+      <path d="M190,160 C260,40 470,10 610,90 C705,145 710,240 770,325 C860,455 770,610 610,610 C490,610 450,520 360,460 C270,405 130,315 190,160 Z" fill="url(#g2)"/>
+    </svg>
+    <div class="grain"></div>
+  </div>
+
+  <!-- Cinematic transition overlay -->
+  <div class="overlay" id="cinematicOverlay" aria-live="polite">
+    <div class="shade"></div>
+    <div class="panel" role="dialog" aria-modal="true">
+      <div class="top">
+        <div class="art" id="overlayArt"></div>
+        <div>
+          <div class="kicker" id="overlayKicker">Scene</div>
+          <div class="title" id="overlayTitle">Nightfall</div>
+        </div>
+      </div>
+      <div class="body" id="overlayBody"></div>
+      <div class="hint" id="overlayHint">Continue on your device.</div>
+    </div>
+  </div>
+
+  <div class="container">
+    <header>
+      <div class="brand">
+        <div class="brandLeft">
+          <div class="logo" aria-hidden="true">
+            <svg width="38" height="38" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" fill="none">
+              <path d="M24 6c7 0 13 5 13 12v8c0 9-6 16-13 16S11 35 11 26v-8C11 11 17 6 24 6Z" stroke="rgba(245,245,247,.88)" stroke-width="2.2"/>
+              <path d="M16 22c2.2-2.4 4.8-3.6 8-3.6s5.8 1.2 8 3.6" stroke="rgba(245,245,247,.72)" stroke-width="2.2" stroke-linecap="round"/>
+              <path d="M18 30c2.2 1.8 4.4 2.7 6.8 2.7s4.6-.9 6.8-2.7" stroke="rgba(245,245,247,.72)" stroke-width="2.2" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <div>
+            <div class="titleMain">Mafia</div>
+            <div class="subtitle">Cinematic social deduction</div>
+          </div>
+        </div>
+
+        <div class="pill" id="soundToggle" onclick="audioEngine.toggle()" title="Toggle sound">
+          <span id="soundIcon">🔊</span>
+          <span>Sound <small id="soundState">On</small></span>
+        </div>
+      </div>
+    </header>
+
+    <!-- Setup Screen -->
+    <section id="setupScreen">
+      <div class="card">
+        <div style="font-weight:1000; font-size:1.35rem; letter-spacing:-0.4px;">Game Master Setup</div>
+        <div class="mini" style="margin-top:6px;">Enter real names, pick a scene, then let each person privately reveal their role.</div>
+
+        <div class="divider"></div>
+
+        <div class="field">
+          <label>Story scene</label>
+          <select id="sceneSelect" onchange="game.applyScenePreview()">
+            <option value="noir" selected>Noir City • Rain & neon</option>
+            <option value="manor">Haunted Manor • Candlelight</option>
+            <option value="space">Deep Space Station • Cold metal</option>
+            <option value="cyber">Cyber District • Chrome & static</option>
+            <option value="western">Frontier Town • Dust & whispers</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label>Narration style</label>
+          <select id="narrationSelect">
+            <option value="vivid" selected>Cinematic (high detail)</option>
+            <option value="standard">Standard (shorter)</option>
+          </select>
+        </div>
+
+        <div class="sceneBanner" id="sceneBanner">
+          <div class="art" id="sceneBannerArt"></div>
+          <div class="txt">
+            <div class="h" id="sceneBannerTitle">Noir City</div>
+            <div class="p" id="sceneBannerText">Rain and neon. Secrets travel fast in puddles.</div>
+          </div>
+        </div>
+
+        <div class="field" style="margin-top:18px;">
+          <label>Add players</label>
+          <div class="row">
+            <input class="grow" type="text" id="newPlayerName" placeholder="Type a name and press Enter" autocomplete="off" />
+            <button class="btn btn-success" style="width:auto" onclick="game.addPlayer()">Add</button>
+          </div>
+        </div>
+
+        <div class="chips" id="playersContainer">
+          <div class="mini" style="width:100%; text-align:center; padding:8px 0;">No players added yet.</div>
+        </div>
+
+        <div class="status" id="playerCountMessage">Players: <strong>0</strong> (Need 5–12 players)</div>
+
+        <button class="btn btn-primary" id="startGameBtn" onclick="game.createGame()" disabled style="margin-top:12px;">Create game & start</button>
+      </div>
+
+      <div class="card">
+        <div style="font-weight:1000; letter-spacing:-0.2px; font-size:1.1rem;">How it plays</div>
+        <div class="hintText" style="margin-top:10px;">Mafia eliminate at night • Doctor protects • Detective investigates • Everyone debates in person during the day, then votes.</div>
+      </div>
+    </section>
+
+    <!-- Player Selection Screen -->
+    <section id="playerSelectScreen" class="hidden">
+      <div class="card">
+        <div class="row" style="justify-content:space-between; align-items:center;">
+          <div>
+            <div style="font-weight:1000; font-size:1.35rem; letter-spacing:-0.4px;">Select your name</div>
+            <div class="mini" style="margin-top:6px;">Tap your name to view your role privately.</div>
+          </div>
+          <div class="status" style="padding:10px 12px; border-radius:14px;">Code <strong id="displayRoomCode"></strong></div>
+        </div>
+
+        <div class="sceneBanner" style="margin-top:14px;">
+          <div class="art" id="sceneBannerArt2"></div>
+          <div class="txt">
+            <div class="h" id="sceneBannerTitle2">Scene</div>
+            <div class="p" id="sceneBannerText2">—</div>
+          </div>
+        </div>
+
+        <div class="grid" id="playerSelectGrid"></div>
+
+        <div class="row" style="margin-top:12px;">
+          <button class="btn btn-secondary" onclick="game.forceRefreshRoom()">Refresh</button>
+          <button class="btn btn-danger" onclick="game.returnToSetup()">End session</button>
+        </div>
+        <div class="mini" style="margin-top:10px;">Tip: Keep this screen on a shared display. Each player taps their own phone when ready.</div>
+      </div>
+    </section>
+
+    <!-- Role Reveal Screen -->
+    <section id="roleScreen" class="hidden">
+      <div class="card">
+        <div class="rolePanel">
+          <div class="roleIcon" id="roleIcon"></div>
+          <div class="roleTitle" id="roleName"></div>
+          <div class="roleDesc" id="roleDescription"></div>
+        </div>
+        <div class="backstory" id="playerBackstory"></div>
+        <div class="row" style="margin-top:14px;">
+          <button class="btn btn-primary" onclick="game.acknowledgeRole()">Continue</button>
+        </div>
+        <div class="mini" style="margin-top:10px;">Keep this screen private.</div>
+      </div>
+    </section>
+
+    <!-- Game Screen -->
+    <section id="gameScreen" class="hidden">
+      <div class="card">
+        <div class="phase" id="phaseBar">
+          <div>
+            <div class="label" id="phaseLabel">Night</div>
+            <div class="meta" id="phaseMeta">Make your choice quietly.</div>
+          </div>
+          <div id="phaseIcon" aria-hidden="true"></div>
+        </div>
+
+        <div class="info">
+          <div class="box"><div class="k">Day</div><div class="v" id="dayCounter">1</div></div>
+          <div class="box"><div class="k">Alive</div><div class="v" id="aliveCounter">0</div></div>
+        </div>
+
+        <div id="narratorSection"></div>
+        <div id="statusMessage"></div>
+        <div id="actionArea"></div>
+
+        <div style="font-weight:1000; margin-top:18px;">Players</div>
+        <ul class="list" id="gamePlayerList"></ul>
+      </div>
+    </section>
+
+    <!-- Game Over Screen -->
+    <section id="gameOverScreen" class="hidden">
+      <div class="card">
+        <div class="rolePanel">
+          <div class="roleTitle" id="winnerTitle"></div>
+          <div class="roleDesc" id="winnerMessage"></div>
+        </div>
+        <div class="narrator" style="margin-top:14px;">
+          <div class="head"><div class="t"><span>📖</span><span>Final chapter</span></div></div>
+          <div class="body"><div id="finalNarration"></div></div>
+        </div>
+
+        <div style="font-weight:1000; margin-top:18px;">Final roles</div>
+        <ul class="list" id="finalRolesList"></ul>
+
+        <button class="btn btn-primary" style="margin-top:12px;" onclick="game.returnToSetup()">Play again</button>
+      </div>
+    </section>
+  </div>
+
+  <script>
+    const svgIcons = {
+      mafia: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="m" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--danger)"/>\
+            <stop offset="1" stop-color="#FF2D55"/>\
+          </linearGradient></defs>\
+          <path d="M48 12c16 0 30 12 30 28v18c0 22-14 36-30 36S18 80 18 58V40c0-16 14-28 30-28Z" stroke="rgba(255,255,255,.85)" stroke-width="3"/>\
+          <path d="M28 42c5-6 12-9 20-9s15 3 20 9" stroke="rgba(255,255,255,.75)" stroke-width="3" stroke-linecap="round"/>\
+          <path d="M33 58h30" stroke="rgba(255,255,255,.55)" stroke-width="3" stroke-linecap="round"/>\
+          <path d="M26 70c7 6 14 9 22 9s15-3 22-9" stroke="url(#m)" stroke-width="5" stroke-linecap="round"/>\
+        </svg>`,
+      doctor: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="d" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--success)"/>\
+            <stop offset="1" stop-color="#34C759"/>\
+          </linearGradient></defs>\
+          <path d="M22 50c0-16 12-30 26-30s26 14 26 30v22c0 10-8 18-18 18H40c-10 0-18-8-18-18V50Z" stroke="rgba(255,255,255,.85)" stroke-width="3"/>\
+          <path d="M48 34v28" stroke="url(#d)" stroke-width="6" stroke-linecap="round"/>\
+          <path d="M34 48h28" stroke="url(#d)" stroke-width="6" stroke-linecap="round"/>\
+        </svg>`,
+      detective: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="i" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--primary)"/>\
+            <stop offset="1" stop-color="var(--secondary)"/>\
+          </linearGradient></defs>\
+          <circle cx="42" cy="42" r="20" stroke="rgba(255,255,255,.85)" stroke-width="3"/>\
+          <path d="M56 56 78 78" stroke="url(#i)" stroke-width="6" stroke-linecap="round"/>\
+          <circle cx="42" cy="42" r="7" fill="url(#i)" opacity=".9"/>\
+        </svg>`,
+      villager: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="v" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="rgba(255,255,255,.55)"/>\
+            <stop offset="1" stop-color="rgba(255,255,255,.20)"/>\
+          </linearGradient></defs>\
+          <path d="M48 18c10 0 18 8 18 18s-8 18-18 18-18-8-18-18 8-18 18-18Z" stroke="rgba(255,255,255,.85)" stroke-width="3"/>\
+          <path d="M22 84c2-18 14-28 26-28s24 10 26 28" stroke="url(#v)" stroke-width="5" stroke-linecap="round"/>\
+        </svg>`
+    };
+
+    const sceneArt = {
+      noir: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="n1" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--primary)" stop-opacity=".9"/>\
+            <stop offset="1" stop-color="var(--secondary)" stop-opacity=".65"/>\
+          </linearGradient></defs>\
+          <path d="M14 72V34l14-10v48H14Z" fill="rgba(255,255,255,.12)"/>\
+          <path d="M32 72V22l16-10v60H32Z" fill="rgba(255,255,255,.16)"/>\
+          <path d="M52 72V30l14-8v50H52Z" fill="rgba(255,255,255,.10)"/>\
+          <path d="M70 72V38l12-6v40H70Z" fill="rgba(255,255,255,.08)"/>\
+          <path d="M10 76h76" stroke="rgba(255,255,255,.25)" stroke-width="2" stroke-linecap="round"/>\
+          <path d="M20 54h10" stroke="url(#n1)" stroke-width="4" stroke-linecap="round"/>\
+          <path d="M36 40h10" stroke="url(#n1)" stroke-width="4" stroke-linecap="round"/>\
+          <path d="M56 50h10" stroke="url(#n1)" stroke-width="4" stroke-linecap="round"/>\
+          <path d="M16 18c6-4 14-6 24-6 18 0 30 6 40 16" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-linecap="round"/>\
+        </svg>`,
+      manor: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="h1" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--primary)"/>\
+            <stop offset="1" stop-color="var(--secondary)"/>\
+          </linearGradient></defs>\
+          <path d="M20 74V42l28-18 28 18v32H20Z" fill="rgba(255,255,255,.12)" stroke="rgba(255,255,255,.20)" stroke-width="2"/>\
+          <path d="M48 24v50" stroke="rgba(255,255,255,.18)" stroke-width="2"/>\
+          <path d="M34 74V56c0-6 6-10 14-10s14 4 14 10v18" stroke="url(#h1)" stroke-width="3" fill="none"/>\
+          <path d="M30 44h8M58 44h8" stroke="rgba(255,255,255,.30)" stroke-width="3" stroke-linecap="round"/>\
+          <path d="M28 24l20-12 20 12" stroke="rgba(255,255,255,.22)" stroke-width="2" stroke-linecap="round"/>\
+        </svg>`,
+      space: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="s1" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--primary)"/>\
+            <stop offset="1" stop-color="var(--secondary)"/>\
+          </linearGradient></defs>\
+          <path d="M18 54c10-20 50-20 60 0" stroke="rgba(255,255,255,.22)" stroke-width="3" stroke-linecap="round"/>\
+          <path d="M22 60c8 16 44 16 52 0" stroke="rgba(255,255,255,.12)" stroke-width="3" stroke-linecap="round"/>\
+          <circle cx="48" cy="48" r="14" stroke="url(#s1)" stroke-width="4"/>\
+          <path d="M48 18v10M48 68v10M18 48h10M68 48h10" stroke="rgba(255,255,255,.18)" stroke-width="2" stroke-linecap="round"/>\
+          <circle cx="74" cy="24" r="2" fill="rgba(255,255,255,.55)"/>\
+          <circle cx="20" cy="26" r="1.8" fill="rgba(255,255,255,.35)"/>\
+          <circle cx="30" cy="18" r="1.3" fill="rgba(255,255,255,.28)"/>\
+        </svg>`,
+      cyber: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="c1" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--primary)"/>\
+            <stop offset="1" stop-color="var(--secondary)"/>\
+          </linearGradient></defs>\
+          <path d="M22 26h52v44H22V26Z" stroke="rgba(255,255,255,.25)" stroke-width="2"/>\
+          <path d="M30 34h16M30 42h26M30 50h20M30 58h26" stroke="url(#c1)" stroke-width="3" stroke-linecap="round"/>\
+          <path d="M66 36v26" stroke="rgba(255,255,255,.16)" stroke-width="2"/>\
+          <circle cx="66" cy="64" r="3" fill="rgba(255,255,255,.22)" stroke="rgba(255,255,255,.25)"/>
+          <path d="M18 74h60" stroke="rgba(255,255,255,.20)" stroke-width="2" stroke-linecap="round"/>
+        </svg>`,
+      western: `\
+        <svg viewBox="0 0 96 96" xmlns="http://www.w3.org/2000/svg" fill="none">\
+          <defs><linearGradient id="w1" x1="0" y1="0" x2="1" y2="1">\
+            <stop offset="0" stop-color="var(--primary)"/>\
+            <stop offset="1" stop-color="var(--secondary)"/>\
+          </linearGradient></defs>\
+          <path d="M20 70V38h56v32" stroke="rgba(255,255,255,.22)" stroke-width="2"/>
+          <path d="M26 38l8-12h28l8 12" fill="rgba(255,255,255,.10)" stroke="rgba(255,255,255,.18)" stroke-width="2"/>
+          <path d="M36 70V54c0-6 6-10 12-10s12 4 12 10v16" stroke="url(#w1)" stroke-width="3"/>
+          <path d="M18 74h60" stroke="rgba(255,255,255,.20)" stroke-width="2" stroke-linecap="round"/>
+          <path d="M64 46h8" stroke="rgba(255,255,255,.20)" stroke-width="3" stroke-linecap="round"/>
+        </svg>`
+    };
+
+    const sceneMeta = {
+      noir: { title: 'Noir City', blurb: 'Rain and neon. Secrets travel fast in puddles.' },
+      manor: { title: 'Haunted Manor', blurb: 'Candlelight and echoes. The house remembers everything.' },
+      space: { title: 'Deep Space Station', blurb: 'Cold metal corridors. Trust is oxygen.' },
+      cyber: { title: 'Cyber District', blurb: 'Chrome and static. Every alibi feels edited.' },
+      western: { title: 'Frontier Town', blurb: 'Dust and whispers. The sun sets too quickly.' }
+    };
+
+    const sceneLibrary = {
+      noir: {
+        opener: ['Rain scribbles across neon glass. Somewhere, a clock tries to sound brave.','The streets breathe in whispers. Streetlights blink like tired witnesses.'],
+        locations: ['beneath the flicker of a broken streetlamp','behind the all-night diner','inside the silent subway entrance','at the edge of the rooftop water tower','in the alley where the city forgets its names'],
+        murder: ['Footsteps approach—measured, unhurried. Then a sudden hush, as if the world holds its breath.','A door clicks shut. A shadow crosses the threshold. The night turns its face away.'],
+        discovery: ['At first light, the town finds what the dark tried to hide.','A crowd gathers in a circle that no one wants to step into.'],
+        save: ['A gloved hand presses cloth to a wound; a heartbeat refuses to quit.','A medicine vial catches the light—brief hope in a city that rarely offers it.'],
+        investigation: ['A cigarette burns down to ash while eyes follow patterns no one else sees.','A note is folded twice. A lie is folded three times.'],
+        vote: ['Voices rise in the square—accusations, alibis, and the sharp edge of fear.','The village argues like a jury with no judge—only time.']
+      },
+      manor: {
+        opener: ['Candlelight trembles along velvet walls. The house listens.','Floorboards sigh. Portrait eyes follow movement with silent judgment.'],
+        locations: ['at the foot of the grand staircase','by the shuttered conservatory','inside the library’s shadowed aisles','near the drafty servant corridor','beneath the cracked stained-glass window'],
+        murder: ['A curtain stirs—no wind. A breath is taken that never returns.','Steel flashes once, then disappears into the dark like a secret.'],
+        discovery: ['Morning brings an awful stillness, and the manor yields another sorrow.','A scream echoes, swallowed by stone and long hallways.'],
+        save: ['Bandages are wrapped with practiced urgency. Life clings like a prayer.','Herbs and steady hands push back the night’s intent.'],
+        investigation: ['Footprints in dust form a sentence. The Detective reads it carefully.','A missing key, a turned frame—evidence hides in plain view.'],
+        vote: ['The dining room becomes a courtroom; every glance is an accusation.','The air tastes like candle smoke and suspicion.']
+      },
+      space: {
+        opener: ['The station hums with recycled air and old secrets.','Outside the viewport: endless black. Inside: too many heartbeats.'],
+        locations: ['near the reactor access hatch','in the dim cargo bay','along the observation ring','between the hydroponics rows','inside the maintenance tunnel'],
+        murder: ['A warning light blinks. Someone doesn’t make it to the next breath.','A comms line goes quiet—too quiet.'],
+        discovery: ['The morning briefing stops cold when the count is wrong.','A panel is smeared. A glove print fades. The station keeps score.'],
+        save: ['A med-kit seals a wound with a hiss of sterile foam.','A defib spark snaps life back into place.'],
+        investigation: ['Logs are scrubbed, but not perfectly. The Detective notices the seams.','A heat map, a timing mismatch—truth emerges in telemetry.'],
+        vote: ['The crew debates at the central hub. Oxygen feels suddenly expensive.','Trust fractures like thin ice in zero gravity.']
+      },
+      cyber: {
+        opener: ['Neon bleeds into puddles. Static hangs in the air like tension.','Screens glow. Faces don’t. The city streams lies at 60 frames per second.'],
+        locations: ['beneath the hologram billboards','inside the abandoned server farm','at the edge of the chrome canal','behind the synth-music club','in the service corridor of the megatower'],
+        murder: ['A signal cuts. A silhouette dissolves into the night feed.','A blade flashes like a cursor—blink and it’s done.'],
+        discovery: ['At daylight, the city’s cameras show everything—except the truth.','The crowd watches replays that never quite explain the missing person.'],
+        save: ['Nanogel stitches flesh with a faint electric shimmer.','A surge of adrenaline and tech keeps a heart online.'],
+        investigation: ['Metadata doesn’t lie, but people do. The Detective reads the timestamps.','A footprint of code points toward someone trying too hard to vanish.'],
+        vote: ['Arguments spark in the plaza like short circuits—hot, fast, dangerous.','Every alibi sounds edited.']
+      },
+      western: {
+        opener: ['Dust drifts through sunrise. The bell rope is still.','Horses snort in uneasy silence. The town has learned to flinch.'],
+        locations: ['behind the saloon’s swinging doors','near the water trough','by the abandoned mine entrance','at the sheriff’s office steps','beside the wind-worn church'],
+        murder: ['Boots stop. A whisper trades places with a heartbeat.','A lantern guttering out leaves the world darker than it should be.'],
+        discovery: ['By morning, the town finds a body and a new reason to fear the dark.','A hat lies in the dust, and the crowd understands immediately.'],
+        save: ['A tourniquet tightens. A prayer mutters. Life stays stubborn.','A steady hand and a sharper needle keep death at arm’s length.'],
+        investigation: ['Tracks in the dirt tell a story—if you know how to listen.','A poker table confession is almost truth, if you squint.'],
+        vote: ['The town forms a circle. Someone has to be the example.','The crowd debates, and the sun feels colder.']
+      }
+    };
+
+    const storyGenerator = {
+      backstories: {
+        Mafia: ['You learned early that fear is a currency—and you spend it freely when it buys silence.','People trust your smile. They never see what you do with that trust after midnight.','You blend in so well it feels like invisibility. Tonight, invisibility becomes power.'],
+        Doctor: ['You’ve seen fragile life up close. In a crisis, your hands don’t shake.','You carry a calm that spreads to others. The town needs it more than ever.','You don’t get to pick who deserves saving—only who might live.'],
+        Detective: ['You notice what people avoid: pauses, patterns, and the way lies breathe.','You’ve solved worse. But this feels personal, like the town itself is hiding something.','Truth is rarely loud. You have learned to hear it anyway.'],
+        Villager: ['You know these faces. You’ve shared meals with them. That’s what makes this terrifying.','You’re ordinary—but ordinary people can be brave when the night demands it.','You want peace back. You’ll argue for it with everything you’ve got.']
+      },
+      pick(arr){ return arr[Math.floor(Math.random()*arr.length)]; },
+
+      buildNightNarrative(sceneKey, narrationStyle, ctx){
+        const s = sceneLibrary[sceneKey] || sceneLibrary.noir;
+        const vivid = narrationStyle === 'vivid';
+        const lines = [];
+        const opener = this.pick(s.opener);
+        const where = this.pick(s.locations);
+
+        if (ctx.mafiaTarget && ctx.doctorSave && ctx.mafiaTarget === ctx.doctorSave) {
+          lines.push({ title: 'Nightfall', body: vivid
+            ? `${opener} ${this.pick(s.murder)} The Mafia closed in on ${ctx.mafiaTarget} ${where}. ${this.pick(s.save)} ${ctx.mafiaTarget} survives—shaken, alive, and suddenly aware that the dark has teeth.`
+            : `${ctx.mafiaTarget} was targeted, but the Doctor saved them.`
+          });
+        } else if (ctx.victim) {
+          lines.push({ title: 'A grim morning', body: vivid
+            ? `${this.pick(s.discovery)} ${this.pick(s.murder)} ${ctx.victim} is found ${where}. The village gathers, counting faces—and realizing one will never answer again.`
+            : `${ctx.victim} was eliminated during the night.`
+          });
+        } else {
+          lines.push({ title: 'No blood spilled', body: vivid
+            ? `${opener} Somehow, the night passes without a funeral. It doesn’t feel like safety—it feels like a warning.`
+            : `No one was eliminated during the night.`
+          });
+        }
+
+        if (ctx.investigatedPlayer) {
+          lines.push({ title: 'An investigation', body: vivid
+            ? `${this.pick(s.investigation)} Before dawn, the Detective quietly investigated ${ctx.investigatedPlayer}. The result is kept close—like a match in a storm.`
+            : `The Detective investigated ${ctx.investigatedPlayer}.`
+          });
+        }
+
+        return { publicEvents: lines };
+      },
+
+      buildDetectivePrivate(sceneKey, narrationStyle, ctx){
+        if (!ctx.investigatedPlayer) return null;
+        const s = sceneLibrary[sceneKey] || sceneLibrary.noir;
+        const vivid = narrationStyle === 'vivid';
+        const isMafia = !!ctx.investigationResult;
+        const verdict = isMafia ? `${ctx.investigatedPlayer} is Mafia.` : `${ctx.investigatedPlayer} is not Mafia.`;
+        return { title:'Detective report', body: vivid
+          ? `${this.pick(s.investigation)} Your notes settle into a single, hard fact: ${verdict} Decide carefully what you reveal—and what you weaponize.`
+          : verdict
+        };
+      },
+
+      buildDayNarrative(sceneKey, narrationStyle, eliminated, tied){
+        const s = sceneLibrary[sceneKey] || sceneLibrary.noir;
+        const vivid = narrationStyle === 'vivid';
+        if (tied) return { title:'The vote fractures', body: vivid
+          ? `${this.pick(s.vote)} The votes split. No one is cast out today—only stared at. The village learns that indecision has a cost.`
+          : `The vote tied. No one was eliminated.`
+        };
+        if (!eliminated) return { title:'No decision', body: vivid
+          ? `${this.pick(s.vote)} The village can’t agree. No one falls—this time.`
+          : `No one was eliminated today.`
+        };
+        return { title:'Judgment', body: vivid
+          ? `${this.pick(s.vote)} The crowd turns toward ${eliminated}. The decision lands heavy. By dusk, one more chair sits empty.`
+          : `${eliminated} was eliminated by vote.`
+        };
+      },
+
+      endNarrative(sceneKey, winner, survivors, fallen){
+        const s = sceneLibrary[sceneKey] || sceneLibrary.noir;
+        const opener = this.pick(s.opener);
+        if (winner === 'Village') return `${opener} The village endures. The last Mafia member is gone, and the air finally feels breathable again. Survivors: ${survivors.join(', ') || 'none'}. Fallen: ${fallen.join(', ') || 'none'}.`;
+        return `${opener} The Mafia takes control. Doors lock earlier. Smiles look practiced. Survivors: ${survivors.join(', ') || 'none'}. Fallen: ${fallen.join(', ') || 'none'}.`;
+      },
+
+      transitionLine(sceneKey, toPhase){
+        const s = sceneLibrary[sceneKey] || sceneLibrary.noir;
+        if (toPhase === 'night') return this.pick(s.opener) + ' The town lowers its voice. The night begins.';
+        return this.pick(s.opener) + ' Morning arrives—without permission.';
+      }
+    };
+
+    const audioEngine = {
+      enabled: true,
+      ctx: null,
+
+      init(){
+        const saved = localStorage.getItem('mafiaSound');
+        if (saved !== null) this.enabled = saved === 'on';
+        this.updateUI();
+      },
+
+      updateUI(){
+        document.getElementById('soundIcon').textContent = this.enabled ? '🔊' : '🔇';
+        document.getElementById('soundState').textContent = this.enabled ? 'On' : 'Off';
+      },
+
+      async ensure(){
+        if (!this.enabled) return false;
+        if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+        if (this.ctx.state === 'suspended') { try { await this.ctx.resume(); } catch(e) {} }
+        return this.ctx.state === 'running';
+      },
+
+      async toggle(){
+        this.enabled = !this.enabled;
+        localStorage.setItem('mafiaSound', this.enabled ? 'on' : 'off');
+        this.updateUI();
+        if (this.enabled) { await this.ensure(); this.beep(880, 0.06, 0.06); }
+      },
+
+      async play(name){
+        if (!this.enabled) return;
+        const ok = await this.ensure();
+        if (!ok) return;
+
+        const presets = {
+          night: [[220,0.08,0.12],[164,0.06,0.14]],
+          day: [[523,0.06,0.06],[659,0.06,0.06]],
+          kill: [[140,0.10,0.16],[96,0.10,0.18]],
+          save: [[659,0.05,0.04],[880,0.06,0.05]],
+          vote: [[392,0.05,0.05]],
+          reveal: [[784,0.05,0.04],[988,0.06,0.05]]
+        };
+
+        const seq = presets[name] || presets.vote;
+        let t = 0;
+        for (const [f,a,d] of seq) { this.beep(f,a,d,t); t += d + 0.03; }
+
+        if (navigator.vibrate) {
+          if (name === 'kill') navigator.vibrate([30, 30, 20]);
+          if (name === 'save') navigator.vibrate([15, 20, 15]);
+          if (name === 'day' || name === 'night') navigator.vibrate(12);
+        }
+      },
+
+      beep(freq, attack, dur, delay=0){
+        const ctx = this.ctx;
+        if (!ctx) return;
+        const o = ctx.createOscillator();
+        const g = ctx.createGain();
+        o.type = 'sine';
+        o.frequency.value = freq;
+        g.gain.value = 0.0001;
+        o.connect(g);
+        g.connect(ctx.destination);
+        const now = ctx.currentTime + delay;
+        g.gain.setValueAtTime(0.0001, now);
+        g.gain.exponentialRampToValueAtTime(0.06, now + attack);
+        g.gain.exponentialRampToValueAtTime(0.0001, now + attack + dur);
+        o.start(now);
+        o.stop(now + attack + dur + 0.02);
+      }
+    };
+
+    const game = {
+      roomCode:'', playerName:'', players:[], myRole:null,
+      phase:'night', day:1, votes:{}, nightActions:{}, playerNames:[],
+      scene:'noir', narrationStyle:'vivid',
+      lastNarrativeKey:null, lastTransitionKey:null,
+
+      init(){
+        audioEngine.init();
+        const input = document.getElementById('newPlayerName');
+        input.addEventListener('keydown', (e)=>{ if(e.key==='Enter'){ e.preventDefault(); this.addPlayer(); } });
+        this.applyScenePreview();
+
+        const savedRoom = localStorage.getItem('mafiaRoom');
+        if (savedRoom) {
+          const roomData = JSON.parse(savedRoom);
+          if (roomData.code) { this.roomCode = roomData.code; this.checkExistingGame(); }
+        }
+
+        document.addEventListener('pointerdown', ()=>audioEngine.ensure(), {once:true});
+
+        // Minimal self-test hook (optional): run in DevTools as window.mafiaSelfTest().
+        window.mafiaSelfTest = () => {
+          const bad = [];
+          const ids = ['setupScreen','playerSelectScreen','roleScreen','gameScreen','gameOverScreen','playersContainer','playerSelectGrid','actionArea'];
+          ids.forEach(id => { if (!document.getElementById(id)) bad.push('Missing #' + id); });
+          if (bad.length) { console.error('Self-test failed:', bad); return false; }
+          console.log('Self-test ok');
+          return true;
+        };
+      },
+
+      applyScenePreview(){
+        const scene = document.getElementById('sceneSelect').value;
+        document.body.setAttribute('data-scene', scene);
+        this.renderSceneBanner(scene);
+      },
+
+      renderSceneBanner(scene){
+        const meta = sceneMeta[scene] || sceneMeta.noir;
+        const art = sceneArt[scene] || sceneArt.noir;
+        const a1 = document.getElementById('sceneBannerArt');
+        const t1 = document.getElementById('sceneBannerTitle');
+        const p1 = document.getElementById('sceneBannerText');
+        if (a1) a1.innerHTML = art;
+        if (t1) t1.textContent = meta.title;
+        if (p1) p1.textContent = meta.blurb;
+        const a2 = document.getElementById('sceneBannerArt2');
+        const t2 = document.getElementById('sceneBannerTitle2');
+        const p2 = document.getElementById('sceneBannerText2');
+        if (a2) a2.innerHTML = art;
+        if (t2) t2.textContent = meta.title;
+        if (p2) p2.textContent = meta.blurb;
+      },
+
+      forceRefreshRoom(){ this.checkExistingGame(true); },
+
+      checkExistingGame(force){
+        const roomData = JSON.parse(localStorage.getItem('mafiaRoom_' + this.roomCode) || 'null');
+        if (!roomData) return;
+
+        this.scene = roomData.scene || 'noir';
+        document.body.setAttribute('data-scene', this.scene);
+        this.renderSceneBanner(this.scene);
+
+        if (roomData.started) {
+          document.getElementById('setupScreen').classList.add('hidden');
+          document.getElementById('playerSelectScreen').classList.remove('hidden');
+          document.getElementById('displayRoomCode').textContent = this.roomCode;
+          this.renderPlayerSelection(roomData.players);
+        }
+
+        const savedName = localStorage.getItem('mafiaPlayer_' + this.roomCode);
+        if (savedName && !force) {
+          const p = roomData.players.find(x => x.name === savedName);
+          if (p) {
+            this.playerName = savedName;
+            this.players = roomData.players;
+            this.phase = roomData.phase;
+            this.day = roomData.day;
+            this.myRole = p.role;
+            document.getElementById('playerSelectScreen').classList.add('hidden');
+            document.getElementById('gameScreen').classList.remove('hidden');
+            this.updateGame();
+            clearInterval(this.gameInterval);
+            this.gameInterval = setInterval(()=>this.updateGame(), 2200);
+          }
+        }
+      },
+
+      addPlayer(){
+        const input = document.getElementById('newPlayerName');
+        const name = (input.value || '').trim();
+        if(!name){ alert('Please enter a player name'); return; }
+        if(this.playerNames.includes(name)){ alert('Player already added'); return; }
+        if(this.playerNames.length >= 12){ alert('Maximum 12 players'); return; }
+        this.playerNames.push(name);
+        input.value = '';
+        this.renderPlayerChips();
+        this.updateStartButton();
+      },
+
+      removePlayer(name){
+        this.playerNames = this.playerNames.filter(n => n !== name);
+        this.renderPlayerChips();
+        this.updateStartButton();
+      },
+
+      renderPlayerChips(){
+        const container = document.getElementById('playersContainer');
+        if(this.playerNames.length === 0){
+          container.innerHTML = '<div class="mini" style="width:100%; text-align:center; padding:8px 0;">No players added yet.</div>';
+          return;
+        }
+        // IMPORTANT: use JSON.stringify to safely embed arbitrary names into inline handlers.
+        container.innerHTML = this.playerNames.map(name => `
+          <div class="chip">
+            <div style="font-weight:900;">${this.escape(name)}</div>
+            <button class="x" onclick='game.removePlayer(${JSON.stringify(name)})'>✕</button>
+          </div>
+        `).join('');
+      },
+
+      updateStartButton(){
+        const count = this.playerNames.length;
+        document.getElementById('playerCountMessage').innerHTML = `Players: <strong>${count}</strong> (Need 5–12 players)`;
+        document.getElementById('startGameBtn').disabled = count < 5 || count > 12;
+      },
+
+      generateRoomCode(){ return Math.random().toString(36).substring(2,8).toUpperCase(); },
+
+      createGame(){
+        if(this.playerNames.length < 5 || this.playerNames.length > 12){ alert('Need 5–12 players'); return; }
+        this.scene = document.getElementById('sceneSelect').value;
+        this.narrationStyle = document.getElementById('narrationSelect').value;
+
+        this.roomCode = this.generateRoomCode();
+        this.players = this.playerNames.map((name, i) => ({
+          name, id: Date.now() + i, alive: true, selectedRole: false, backstory: '', role: 'Villager'
+        }));
+
+        this.assignRoles();
+
+        const roomData = {
+          code: this.roomCode, started: true, scene: this.scene, narrationStyle: this.narrationStyle,
+          players: this.players, phase: 'night', day: 1, votes: {}, nightActions: {},
+          narrativePublic: null, narrativeDay: null, detectiveReports: {}, doctorLastSave: null,
+          resolving: false, narrativeKey: 0, transitionKey: 0, transition: null,
+          gameOver: false, winner: null
+        };
+
+        localStorage.setItem('mafiaRoom_' + this.roomCode, JSON.stringify(roomData));
+        localStorage.setItem('mafiaRoom', JSON.stringify({ code: this.roomCode }));
+
+        document.body.setAttribute('data-scene', this.scene);
+        this.renderSceneBanner(this.scene);
+
+        document.getElementById('setupScreen').classList.add('hidden');
+        document.getElementById('playerSelectScreen').classList.remove('hidden');
+        document.getElementById('displayRoomCode').textContent = this.roomCode;
+        this.renderPlayerSelection(this.players);
+
+        this.showOverlay({
+          kicker: 'Scene selected',
+          title: (sceneMeta[this.scene]?.title || 'Scene'),
+          body: (sceneMeta[this.scene]?.blurb || ''),
+          hint: 'Players may now select their names.'
+        }, 1800);
+        audioEngine.play('reveal');
+      },
+
+      assignRoles(){
+        const n = this.players.length;
+        const mafiaCount = Math.max(1, Math.floor(n/3));
+        const hasDoctor = n >= 6;
+        const hasDetective = n >= 7;
+
+        const roles = [];
+        for(let i=0;i<mafiaCount;i++) roles.push('Mafia');
+        if(hasDoctor) roles.push('Doctor');
+        if(hasDetective) roles.push('Detective');
+        while(roles.length < n) roles.push('Villager');
+
+        for (let i = roles.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [roles[i], roles[j]] = [roles[j], roles[i]];
+        }
+
+        for(let i=0;i<n;i++){
+          this.players[i].role = roles[i];
+          const sceneOpener = storyGenerator.pick(sceneLibrary[this.scene]?.opener || sceneLibrary.noir.opener);
+          this.players[i].backstory = sceneOpener + ' ' + storyGenerator.pick(storyGenerator.backstories[roles[i]]);
+        }
+      },
+
+      renderPlayerSelection(players){
+        const grid = document.getElementById('playerSelectGrid');
+        grid.innerHTML = players.map(p => `
+          <button class="pick" onclick='game.selectPlayer(${JSON.stringify(p.name)})' ${p.selectedRole ? 'disabled' : ''}>
+            ${this.escape(p.name)} ${p.selectedRole ? '✓' : ''}
+          </button>
+        `).join('');
+      },
+
+      selectPlayer(name){
+        this.playerName = name;
+        localStorage.setItem('mafiaPlayer_' + this.roomCode, name);
+
+        const roomData = JSON.parse(localStorage.getItem('mafiaRoom_' + this.roomCode));
+        const myPlayer = roomData.players.find(p => p.name === name);
+        if(!myPlayer) return;
+
+        myPlayer.selectedRole = true;
+        localStorage.setItem('mafiaRoom_' + this.roomCode, JSON.stringify(roomData));
+
+        this.players = roomData.players;
+        this.scene = roomData.scene || 'noir';
+        this.narrationStyle = roomData.narrationStyle || 'vivid';
+        this.phase = roomData.phase;
+        this.day = roomData.day;
+        this.myRole = myPlayer.role;
+
+        document.body.setAttribute('data-scene', this.scene);
+        this.renderSceneBanner(this.scene);
+
+        audioEngine.play('reveal');
+        this.showRole();
+      },
+
+      showRole(){
+        document.getElementById('playerSelectScreen').classList.add('hidden');
+        document.getElementById('roleScreen').classList.remove('hidden');
+
+        const info = {
+          Mafia: { icon: svgIcons.mafia, title:'Mafia', desc:'At night, choose someone to eliminate. Win when Mafia equal or outnumber everyone else.' },
+          Doctor: { icon: svgIcons.doctor, title:'Doctor', desc:'At night, choose someone to protect. You cannot protect the same person two nights in a row.' },
+          Detective: { icon: svgIcons.detective, title:'Detective', desc:'At night, investigate one player. You learn whether they are Mafia.' },
+          Villager: { icon: svgIcons.villager, title:'Villager', desc:'Debate during the day and vote. Find the Mafia before it’s too late.' }
+        };
+
+        const myPlayer = this.players.find(p => p.name === this.playerName);
+        document.getElementById('roleIcon').innerHTML = info[this.myRole].icon;
+        document.getElementById('roleName').textContent = info[this.myRole].title;
+        document.getElementById('roleDescription').textContent = info[this.myRole].desc;
+        document.getElementById('playerBackstory').textContent = myPlayer?.backstory || '';
+      },
+
+      acknowledgeRole(){
+        document.getElementById('roleScreen').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('hidden');
+        this.updateGame();
+        clearInterval(this.gameInterval);
+        this.gameInterval = setInterval(()=>this.updateGame(), 2200);
+      },
+
+      updateGame(){
+        const roomData = JSON.parse(localStorage.getItem('mafiaRoom_' + this.roomCode));
+        if(!roomData) return;
+
+        this.players = roomData.players;
+        this.scene = roomData.scene || 'noir';
+        this.narrationStyle = roomData.narrationStyle || 'vivid';
+        this.phase = roomData.phase;
+        this.day = roomData.day;
+        this.votes = roomData.votes || {};
+        this.nightActions = roomData.nightActions || {};
+
+        document.body.setAttribute('data-scene', this.scene);
+        this.renderSceneBanner(this.scene);
+
+        if (roomData.gameOver) {
+          clearInterval(this.gameInterval);
+          this.showGameOver(roomData.winner);
+          return;
+        }
+
+        const tk = roomData.transitionKey || 0;
+        if (this.lastTransitionKey !== tk && roomData.transition) {
+          this.lastTransitionKey = tk;
+          this.playTransition(roomData.transition);
+        }
+
+        const nk = roomData.narrativeKey || 0;
+        if (this.lastNarrativeKey !== nk) {
+          this.lastNarrativeKey = nk;
+          this.displayNarration(roomData);
+        }
+
+        this.renderGame(roomData);
+        this.maybeResolve(roomData);
+      },
+
+      playTransition(tr){
+        const meta = sceneMeta[this.scene] || sceneMeta.noir;
+        const phaseTitle = tr.to === 'day' ? 'Daybreak' : 'Nightfall';
+        const body = tr.text || storyGenerator.transitionLine(this.scene, tr.to);
+        const hint = tr.to === 'day' ? 'Discuss in person. Then vote on your device.' : 'Keep voices low. Night actions are secret.';
+        this.showOverlay({ kicker: meta.title, title: phaseTitle, body, hint }, 1700);
+        if (tr.to === 'day') audioEngine.play('day'); else audioEngine.play('night');
+        if (tr.kind === 'kill') audioEngine.play('kill');
+        if (tr.kind === 'save') audioEngine.play('save');
+      },
+
+      showOverlay({kicker,title,body,hint}, ms=1500){
+        const o = document.getElementById('cinematicOverlay');
+        document.getElementById('overlayArt').innerHTML = sceneArt[this.scene] || sceneArt.noir;
+        document.getElementById('overlayKicker').textContent = kicker || '';
+        document.getElementById('overlayTitle').textContent = title || '';
+        document.getElementById('overlayBody').textContent = body || '';
+        document.getElementById('overlayHint').textContent = hint || '';
+        o.classList.add('show');
+        setTimeout(()=>o.classList.remove('show'), ms);
+      },
+
+      displayNarration(roomData){
+        const section = document.getElementById('narratorSection');
+        const blocks = [];
+        if (roomData.narrativePublic?.length) blocks.push({ title:'Game Master', isPrivate:false, items: roomData.narrativePublic });
+        const myReport = roomData.detectiveReports?.[this.playerName];
+        if (myReport) blocks.push({ title:'Detective report', isPrivate:true, items: [myReport] });
+        if (roomData.narrativeDay?.length) blocks.push({ title:'Day announcement', isPrivate:false, items: roomData.narrativeDay });
+        if (!blocks.length) { section.innerHTML = ''; return; }
+
+        section.innerHTML = blocks.map(block => {
+          const body = block.items.map((it, idx) => `
+            <div class="event" style="animation-delay:${Math.min(idx*90, 240)}ms">
+              <div class="h">${this.escape(it.title)}</div>
+              <div class="p">${this.escape(it.body)}</div>
+            </div>
+          `).join('');
+
+          return `
+            <div class="narrator">
+              <div class="head">
+                <div class="t"><span>📖</span><span>${this.escape(block.title)}</span></div>
+                ${block.isPrivate ? '<span class="privateTag">Private</span>' : ''}
+              </div>
+              <div class="body">${body}</div>
+            </div>
+          `;
+        }).join('');
+      },
+
+      renderGame(roomData){
+        const myPlayer = this.players.find(p => p.name === this.playerName);
+        const alive = this.players.filter(p => p.alive);
+        document.getElementById('dayCounter').textContent = this.day;
+        document.getElementById('aliveCounter').textContent = alive.length;
+
+        const phaseLabel = document.getElementById('phaseLabel');
+        const phaseMeta = document.getElementById('phaseMeta');
+        const phaseIcon = document.getElementById('phaseIcon');
+
+        if (this.phase === 'night') {
+          phaseLabel.textContent = 'Night';
+          phaseMeta.textContent = 'Make your choice quietly.';
+          phaseIcon.innerHTML = `
+            <svg width="44" height="44" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" fill="none">
+              <path d="M32 10c-8 1-14 8-14 16s6 15 14 16c-2 2-5 3-8 3-9 0-16-7-16-16S15 13 24 13c3 0 6 1 8 3Z" fill="rgba(255,255,255,.18)" stroke="rgba(255,255,255,.45)" stroke-width="1.5"/>
+            </svg>`;
+        } else {
+          phaseLabel.textContent = 'Day';
+          phaseMeta.textContent = 'Discuss in person, then vote.';
+          phaseIcon.innerHTML = `
+            <svg width="44" height="44" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg" fill="none">
+              <circle cx="24" cy="24" r="10" fill="rgba(255,159,10,.22)" stroke="rgba(255,159,10,.55)" stroke-width="1.5"/>
+              <path d="M24 5v6M24 37v6M5 24h6M37 24h6M10 10l4 4M34 34l4 4M38 10l-4 4M10 38l4-4" stroke="rgba(255,159,10,.55)" stroke-width="1.5" stroke-linecap="round"/>
+            </svg>`;
+        }
+
+        const ul = document.getElementById('gamePlayerList');
+        ul.innerHTML = this.players.map(p => `
+          <li class="item">
+            <div style="font-weight:900;">${this.escape(p.name)} ${p.name===this.playerName ? '<span style="color:rgba(245,245,247,.55); font-weight:850;">(You)</span>' : ''}</div>
+            ${p.alive ? '' : '<span class="badge dead">Eliminated</span>'}
+          </li>
+        `).join('');
+
+        this.renderActions(roomData, myPlayer, alive);
+      },
+
+      renderActions(roomData, myPlayer, alive){
+        const status = document.getElementById('statusMessage');
+        const area = document.getElementById('actionArea');
+        if (!myPlayer || !myPlayer.alive) {
+          status.innerHTML = `<div class="status">You are eliminated. Stay quiet and observe.</div>`;
+          area.innerHTML = '';
+          return;
+        }
+        if (this.phase === 'night') this.renderNight(roomData, alive, status, area);
+        else this.renderDay(roomData, alive, status, area);
+      },
+
+      renderNight(roomData, alive, status, area){
+        const acted = (roomData.nightActions || {}).hasOwnProperty(this.playerName);
+        if (acted) {
+          status.innerHTML = `<div class="status">✓ Action submitted. Waiting for others…</div>`;
+          area.innerHTML = '';
+          return;
+        }
+
+        if (this.myRole === 'Villager') {
+          status.innerHTML = `<div class="status">Stay quiet. The night is dangerous.</div>`;
+          area.innerHTML = `<button class="btn btn-secondary" onclick="game.submitNightAction(null)">Acknowledge</button>`;
+          return;
+        }
+
+        if (this.myRole === 'Mafia') {
+          status.innerHTML = `<div class="status">Choose someone to eliminate.</div>`;
+          const targets = alive.filter(p => p.role !== 'Mafia');
+          area.innerHTML = `<div class="grid">${targets.map(p=>`<button class="pick" onclick='game.submitNightAction(${JSON.stringify(p.name)})'>${this.escape(p.name)}</button>`).join('')}</div>`;
+          return;
+        }
+
+        if (this.myRole === 'Doctor') {
+          status.innerHTML = `<div class="status">Choose someone to protect tonight.</div>`;
+          const lastSave = roomData.doctorLastSave;
+          area.innerHTML = `<div class="grid">${alive.map(p=>{
+            const disabled = lastSave && p.name === lastSave;
+            return `<button class="pick" onclick='game.submitNightAction(${JSON.stringify(p.name)})' ${disabled ? 'disabled' : ''}>${this.escape(p.name)}${disabled ? ' • last night' : ''}</button>`;
+          }).join('')}</div>`;
+          return;
+        }
+
+        if (this.myRole === 'Detective') {
+          status.innerHTML = `<div class="status">Choose someone to investigate.</div>`;
+          const targets = alive.filter(p => p.name !== this.playerName);
+          area.innerHTML = `<div class="grid">${targets.map(p=>`<button class="pick" onclick='game.submitNightAction(${JSON.stringify(p.name)})'>${this.escape(p.name)}</button>`).join('')}</div>`;
+        }
+      },
+
+      renderDay(roomData, alive, status, area){
+        const voted = (roomData.votes || {}).hasOwnProperty(this.playerName);
+        if (voted) {
+          status.innerHTML = `<div class="status">✓ Vote submitted. Waiting for others…</div>`;
+          area.innerHTML = '';
+          return;
+        }
+        status.innerHTML = `<div class="status">Discuss face-to-face. Then vote.</div>`;
+        const targets = alive.filter(p => p.name !== this.playerName);
+        area.innerHTML = `
+          <div class="grid">
+            ${targets.map(p=>`<button class="pick" onclick='game.submitVote(${JSON.stringify(p.name)})'>${this.escape(p.name)}</button>`).join('')}
+            <button class="pick" onclick="game.submitVote('skip')">Skip</button>
+          </div>
+        `;
+      },
+
+      submitNightAction(target){
+        const roomData = JSON.parse(localStorage.getItem('mafiaRoom_' + this.roomCode));
+        roomData.nightActions = roomData.nightActions || {};
+        const me = roomData.players.find(p => p.name === this.playerName);
+        if (me?.role === 'Doctor') {
+          if (roomData.doctorLastSave && target === roomData.doctorLastSave) {
+            alert('You cannot protect the same person two nights in a row.');
+            return;
+          }
+        }
+        roomData.nightActions[this.playerName] = target;
+        localStorage.setItem('mafiaRoom_' + this.roomCode, JSON.stringify(roomData));
+      },
+
+      submitVote(target){
+        const roomData = JSON.parse(localStorage.getItem('mafiaRoom_' + this.roomCode));
+        roomData.votes = roomData.votes || {};
+        roomData.votes[this.playerName] = target;
+        localStorage.setItem('mafiaRoom_' + this.roomCode, JSON.stringify(roomData));
+        audioEngine.play('vote');
+      },
+
+      maybeResolve(roomData){
+        if (roomData.resolving) return;
+        const alive = roomData.players.filter(p => p.alive);
+        if (roomData.phase === 'night') {
+          const needed = alive.filter(p => ['Mafia','Doctor','Detective'].includes(p.role)).length;
+          const got = Object.keys(roomData.nightActions || {}).length;
+          if (got >= needed) this.tryResolveNight();
+        } else {
+          const needed = alive.length;
+          const got = Object.keys(roomData.votes || {}).length;
+          if (got >= needed) this.tryResolveDay();
+        }
+      },
+
+      tryLock(){
+        const roomData = JSON.parse(localStorage.getItem('mafiaRoom_' + this.roomCode));
+        if (!roomData || roomData.resolving) return null;
+        roomData.resolving = true;
+        localStorage.setItem('mafiaRoom_' + this.roomCode, JSON.stringify(roomData));
+        return roomData;
+      },
+
+      tryResolveNight(){
+        const roomData = this.tryLock();
+        if (!roomData) return;
+        this.resolveNight(roomData);
+      },
+
+      tryResolveDay(){
+        const roomData = this.tryLock();
+        if (!roomData) return;
+        this.resolveDay(roomData);
+      },
+
+      resolveNight(roomData){
+        const actions = roomData.nightActions || {};
+
+        const mafiaTargets = Object.entries(actions)
+          .filter(([actor, target]) => {
+            const p = roomData.players.find(x => x.name === actor);
+            return p && p.role === 'Mafia' && target;
+          })
+          .map(([_, target]) => target);
+
+        const mafiaTarget = mafiaTargets.length ? this.pluralityPick(mafiaTargets) : null;
+
+        const doctorSave = Object.entries(actions).find(([actor, _]) => {
+          const p = roomData.players.find(x => x.name === actor);
+          return p && p.role === 'Doctor';
+        })?.[1] || null;
+
+        const detectiveActor = Object.keys(actions).find(actor => {
+          const p = roomData.players.find(x => x.name === actor);
+          return p && p.role === 'Detective';
+        }) || null;
+
+        const investigatedPlayer = detectiveActor ? actions[detectiveActor] : null;
+        let investigationResult = null;
+        if (investigatedPlayer) {
+          const t = roomData.players.find(p => p.name === investigatedPlayer);
+          investigationResult = (t && t.role === 'Mafia');
+        }
+
+        let victim = null;
+        let kind = null;
+        if (mafiaTarget && mafiaTarget !== doctorSave) {
+          const v = roomData.players.find(p => p.name === mafiaTarget);
+          if (v) { v.alive = false; victim = mafiaTarget; kind = 'kill'; }
+        } else if (mafiaTarget && doctorSave && mafiaTarget === doctorSave) {
+          kind = 'save';
+        }
+
+        if (doctorSave) roomData.doctorLastSave = doctorSave;
+
+        const ctx = { mafiaTarget, doctorSave, victim, investigatedPlayer, investigationResult };
+        const nightNarr = storyGenerator.buildNightNarrative(roomData.scene, roomData.narrationStyle, ctx);
+        roomData.narrativePublic = nightNarr.publicEvents;
+        roomData.narrativeDay = null;
+
+        roomData.detectiveReports = roomData.detectiveReports || {};
+        const rep = storyGenerator.buildDetectivePrivate(roomData.scene, roomData.narrationStyle, ctx);
+        if (rep && detectiveActor) roomData.detectiveReports[detectiveActor] = rep;
+
+        roomData.transition = { from:'night', to:'day', kind: kind, text: storyGenerator.transitionLine(roomData.scene, 'day') };
+        roomData.transitionKey = (roomData.transitionKey || 0) + 1;
+
+        roomData.phase = 'day';
+        roomData.votes = {};
+        roomData.nightActions = {};
+        roomData.narrativeKey = (roomData.narrativeKey || 0) + 1;
+        roomData.resolving = false;
+
+        this.saveRoom(roomData);
+        this.checkWinCondition(roomData);
+      },
+
+      resolveDay(roomData){
+        const votes = roomData.votes || {};
+        const tally = {};
+        Object.values(votes).forEach(t => { if (t && t !== 'skip') tally[t] = (tally[t] || 0) + 1; });
+
+        let eliminated = null;
+        let tied = false;
+        const entries = Object.entries(tally);
+        if (entries.length) {
+          entries.sort((a,b)=>b[1]-a[1]);
+          const top = entries[0][1];
+          const topNames = entries.filter(([_,c])=>c===top).map(([n,_])=>n);
+          if (topNames.length > 1) tied = true;
+          else eliminated = topNames[0];
+        }
+
+        if (eliminated) {
+          const v = roomData.players.find(p => p.name === eliminated);
+          if (v) v.alive = false;
+        }
+
+        roomData.narrativeDay = [storyGenerator.buildDayNarrative(roomData.scene, roomData.narrationStyle, eliminated, tied)];
+
+        roomData.transition = { from:'day', to:'night', kind:'vote', text: storyGenerator.transitionLine(roomData.scene, 'night') };
+        roomData.transitionKey = (roomData.transitionKey || 0) + 1;
+
+        roomData.phase = 'night';
+        roomData.day = (roomData.day || 1) + 1;
+        roomData.votes = {};
+        roomData.nightActions = {};
+        roomData.narrativeKey = (roomData.narrativeKey || 0) + 1;
+        roomData.resolving = false;
+
+        this.saveRoom(roomData);
+        this.checkWinCondition(roomData);
+      },
+
+      checkWinCondition(roomData){
+        const alive = roomData.players.filter(p => p.alive);
+        const mafia = alive.filter(p => p.role === 'Mafia').length;
+        const others = alive.filter(p => p.role !== 'Mafia').length;
+        if (mafia === 0) { roomData.gameOver = true; roomData.winner = 'Village'; this.saveRoom(roomData); }
+        else if (mafia >= others) { roomData.gameOver = true; roomData.winner = 'Mafia'; this.saveRoom(roomData); }
+      },
+
+      showGameOver(winner){
+        document.getElementById('gameScreen').classList.add('hidden');
+        document.getElementById('gameOverScreen').classList.remove('hidden');
+        const survivors = this.players.filter(p => p.alive).map(p => p.name);
+        const fallen = this.players.filter(p => !p.alive).map(p => p.name);
+        document.getElementById('winnerTitle').textContent = winner === 'Village' ? 'Village wins' : 'Mafia wins';
+        document.getElementById('winnerMessage').textContent = winner === 'Village' ? 'The Mafia have been eliminated.' : 'The Mafia now control the town.';
+        document.getElementById('finalNarration').textContent = storyGenerator.endNarrative(this.scene, winner, survivors, fallen);
+        const finalList = document.getElementById('finalRolesList');
+        finalList.innerHTML = this.players.map(p => `
+          <li class="item">
+            <div style="font-weight:900;">${this.escape(p.name)} ${p.alive ? '' : '<span class="badge dead">Fallen</span>'}</div>
+            <span class="badge">${this.escape(p.role)}</span>
+          </li>
+        `).join('');
+      },
+
+      saveRoom(roomData){ localStorage.setItem('mafiaRoom_' + this.roomCode, JSON.stringify(roomData)); },
+
+      pluralityPick(arr){
+        const c = {}; for (const v of arr) c[v] = (c[v] || 0) + 1;
+        let best = null, bestN = -1; for (const [k,n] of Object.entries(c)) if (n > bestN) { bestN = n; best = k; }
+        return best;
+      },
+
+      returnToSetup(){
+        localStorage.removeItem('mafiaRoom');
+        if (this.roomCode) {
+          localStorage.removeItem('mafiaRoom_' + this.roomCode);
+          localStorage.removeItem('mafiaPlayer_' + this.roomCode);
+        }
+        location.reload();
+      },
+
+      escape(s){
+        return String(s).replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+      }
+    };
+
+    window.addEventListener('DOMContentLoaded', ()=>game.init());
+  </script>
+</body>
+</html>
